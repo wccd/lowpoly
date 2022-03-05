@@ -1,11 +1,22 @@
 <script setup lang="ts">
 // This starter template is using Vue 3 <script setup> SFCs
 // Check out https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup
-import { ref,onMounted, defineExpose } from 'vue'
+import { ref,onMounted, defineExpose, reactive, nextTick } from 'vue'
 import Sobel from 'Sobel'
 import Delaunay from './utils/delaunay.js'
 
-let imgBlob: Blob
+let tempData:any = {
+  originFile: null,
+  imageData: null,
+  saveData: null,
+}
+function resetTemp() {
+  tempData = {
+    originFile: null,
+    imageData: null,
+    saveData: null,
+  }
+}
 // tool
 function toHex(r:number, g:number, b:number) {
     let hex = `#${((1 << 24) + (r << 16) + (b << 8) + b).toString(16).slice(1)}`;
@@ -17,6 +28,9 @@ function getPxColor(imageData:any, x: number, y:number, width: number) {
   var r = iData[position], g = iData[position + 1], b = iData[position + 2], a = iData[position + 3];
   // return toHex(r, g, b)
   return [r,g,b,a]
+}
+function toInt(num: number) {
+  return num < 1 ? Math.round(num * 1000) / 1000 : Math.round(num)
 }
 
 // image
@@ -52,12 +66,19 @@ async function loadImg(blob: Blob) {
   let imageData = ctx.getImageData(0, 0, width, height);
   return imageData
 }
-function zipImg(imageData: any) {
-
-}
 
 
 // point array
+const userDefault = ref(false),
+      pointRange = ref([0,1000]),
+      userPointNum = ref(1),
+      userMarginRandom = ref(1);
+function resetPrefer() {
+  userDefault.value = false;
+  pointRange.value = [0,1000];
+  userPointNum.value = 1
+  userMarginRandom.value = 1
+}
 function getPointList(imageData:any, sobelImageData:any) {
   let gap = 1;
   let arr = [];
@@ -123,17 +144,37 @@ function randomPoint(imageData: any, randomNum: number) {
 }
 
 async function sobelImg(blob: Blob) {
-  let imageData = await loadImg(blob)
-  let pointNum= imageData.width * imageData.height / 100,
-      marginPointNum = pointNum * 9 / 10,
-      randomPointNum = pointNum * 1 / 10;
+  let imageData, pointNum: number, marginPointNum, randomPointNum;
+  if(!tempData.imageData) {
+    imageData = await loadImg(blob)
+    tempData.imageData = imageData;
+  } else {
+    console.log('use cache')
+    imageData = tempData.imageData;
+  }
+
+  pointNum = imageData.width * imageData.height / 100;
+  pointRange.value = [pointNum / 10, pointNum];
+  marginPointNum = pointNum * 90,
+  randomPointNum = pointNum * 10;
+
+  if(userDefault.value) {
+    marginPointNum = userPointNum.value * userMarginRandom.value;
+    randomPointNum = userPointNum.value * (100 - userMarginRandom.value);
+  } else {
+    nextTick(() => {
+      userPointNum.value = pointNum;
+      userMarginRandom.value = 90;
+    })
+  }
+  
 
   let sobelData = Sobel(imageData);
   let sobelImageData = sobelData.toImageData();
 
   let arr = getPointList(imageData, sobelImageData);
-  let marginList = randomMarginPoint(arr, marginPointNum); // 获取原图边缘上随机点
-  let randomList = randomPoint(imageData, randomPointNum); // 获取原图上随机点
+  let marginList = randomMarginPoint(arr, marginPointNum / 100); // 获取原图边缘上随机点
+  let randomList = randomPoint(imageData, randomPointNum / 100); // 获取原图上随机点
 
   return {
     imageData: imageData,
@@ -142,6 +183,10 @@ async function sobelImg(blob: Blob) {
 }
 
 // draw
+function cleanDraw() {
+  orginImg.value.innerHTML = ''
+  lowpolyImg.value.innerHTML = ''
+}
 async function drawCanvas(blob: Blob) {
   let canvas = document.createElement('canvas');
   let ctx = canvas.getContext('2d')!;
@@ -149,8 +194,7 @@ async function drawCanvas(blob: Blob) {
   canvas.width = imageData.width;
   canvas.height = imageData.height;
   ctx.putImageData(imageData,0,0)
-  canvas.style.cssText = "width: 48%"
-  document.body.appendChild(canvas)
+  orginImg.value.appendChild(canvas)
 
   toDelaunay(imageData, pointData)
 }
@@ -180,28 +224,46 @@ function toDelaunay(imageData:any, vertices: any) {
     ctx.closePath();
     ctx.stroke();
   }
-  canvas.style.cssText = "width: 48%;margin-left: 4%"
   canvas.toBlob((data: Blob | null) => {
-    imgBlob = data!;
+    tempData.saveData = data!;
   })
-  document.body.appendChild(canvas)
+  lowpolyImg.value.appendChild(canvas)
 }
 
 
 const selector = ref();
+const orginImg = ref();
+const lowpolyImg = ref();
 
 const selectFile = () => {
+  resetTemp();
+  resetPrefer();
   selector.value.click()
 }
 
 const changeFile = (e: any) => {
+  cleanDraw();
   let files = e.target.files;
-  drawCanvas(files[0])
+  tempData.originFile = files;
+  drawCanvas(files[0]);
+  e.target.value = null;
+}
+
+const changePointNum = () => {
+  userDefault.value = true;
+  cleanDraw();
+  drawCanvas(tempData.originFile)
+}
+
+const changeMarginRandom = () => {
+  userDefault.value = true;
+  cleanDraw();
+  drawCanvas(tempData.originFile)
 }
 
 const saveToImg = () => {
   var a = document.createElement('a')
-  var url = window.URL.createObjectURL(imgBlob)
+  var url = window.URL.createObjectURL(tempData.saveData)
   a.href = url
   a.download = Math.floor(Math.random() * 100000) + '.png'
   a.click()
@@ -211,36 +273,71 @@ const saveToImg = () => {
 defineExpose({
   selectFile,
   saveToImg,
-  changeFile
+  changeFile,
+  changePointNum,
+  changeMarginRandom,
 })
-
 
 
 </script>
 
 <template>
-  <div class="btn" @click="selectFile">选择图片</div>
-  <div class="btn" style="left: calc(80% - 80px)" @click="saveToImg">存为图片</div>
   <input type="file" ref="selector" style="display: none" @change="changeFile">
+  <div class="show-box">
+    <div class="origin-img img-box" ref="orginImg"></div>
+    <div class="lowpoly-img img-box" ref="lowpolyImg"></div>
+  </div>
+  <div class="slider">
+    <div class="slider-input">
+      <p>点数 点数越多色块越密集({{ toInt(userPointNum) }})</p>
+      <input type="range" :min="pointRange[0]" :max="pointRange[1]" v-model="userPointNum" @change="changePointNum">
+    </div>
+    <div class="slider-input">
+      <p>边缘随机点数比,0-1越大轮廓越清晰({{ userMarginRandom / 100 }})</p>
+      <input type="range" min="1" v-model="userMarginRandom" @change="changeMarginRandom">
+    </div>
+  </div>
+  <div class="btn-box">
+    <div class="btn" @click="selectFile">选择图片</div>
+    <div class="btn" style="left: calc(80% - 80px)" @click="saveToImg">存为图片</div>
+  </div>
 </template>
 
 <style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
-}
 html {
   background: #9a9a9a;
-
+  margin: 0;
+  padding: 0;
+}
+div,body,p {
+  margin: 0;
+  padding: 0;
+}
+.show-box {
+  width: 100vw;
+  height: calc(100vh - 80px - 80px);
+  display: flex;
+  justify-content: space-around;
+  align-content: center;
+  padding-top: 30px;
+  box-sizing: border-box;
+}
+.img-box {
+  width: 48%;
+}
+.img-box canvas {
+  width: 100%;
+}
+.btn-box {
+  width: 100vw;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+}
+.btn-box :first-child {
+  margin-right: 30px;
 }
 .btn {
-  position: absolute;
-  left: calc(50% - 80px);
-  bottom: 100px;
   width: 80px;
   height: 32px;
   display: flex;
@@ -250,5 +347,25 @@ html {
   font-size: 12px;
   background: #017fff;
   cursor: pointer;
+}
+.slider {
+  height: 80px;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+}
+.slider :first-child {
+  margin-right: 30px;
+}
+.slider-input {
+  height: 40px;
+  width: 30%;
+}
+.slider-input p {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.slider-input input {
+  width: 100%;
 }
 </style>
