@@ -234,6 +234,7 @@ function toDelaunay(imageData:any, vertices: any) {
 const selector = ref();
 const orginImg = ref();
 const lowpolyImg = ref();
+const imageNum = ref(0);
 
 const selectFile = () => {
   resetTemp();
@@ -270,12 +271,18 @@ const saveToImg = () => {
   window.URL.revokeObjectURL(url)
 }
 
+const switchImg = () => {
+  imageNum.value = !!imageNum.value ? 0 : 1;
+  console.log(imageNum.value)
+}
+
 defineExpose({
   selectFile,
   saveToImg,
   changeFile,
   changePointNum,
   changeMarginRandom,
+  switchImg,
 })
 
 
@@ -284,22 +291,25 @@ defineExpose({
 <template>
   <input type="file" ref="selector" style="display: none" @change="changeFile">
   <div class="show-box">
-    <div class="origin-img img-box" ref="orginImg"></div>
-    <div class="lowpoly-img img-box" ref="lowpolyImg"></div>
+    <div class="origin-img img-box" ref="orginImg" v-show="imageNum == 0"></div>
+    <div class="lowpoly-img img-box" ref="lowpolyImg" v-show="imageNum == 1"></div>
   </div>
-  <div class="slider">
-    <div class="slider-input">
-      <p>点数 点数越多色块越密集({{ toInt(userPointNum) }})</p>
-      <input type="range" :min="pointRange[0]" :max="pointRange[1]" v-model="userPointNum" @change="changePointNum">
+  <div class="bottom-box">
+    <div class="slider">
+      <div class="slider-input">
+        <p>点数 点数越多色块越密集({{ toInt(userPointNum) }})</p>
+        <input type="range" :min="pointRange[0]" :max="pointRange[1]" v-model="userPointNum" @change="changePointNum">
+      </div>
+      <div class="slider-input">
+        <p>边缘随机点数比,0-1越大轮廓越清晰({{ userMarginRandom / 100 }})</p>
+        <input type="range" min="1" v-model="userMarginRandom" @change="changeMarginRandom">
+      </div>
     </div>
-    <div class="slider-input">
-      <p>边缘随机点数比,0-1越大轮廓越清晰({{ userMarginRandom / 100 }})</p>
-      <input type="range" min="1" v-model="userMarginRandom" @change="changeMarginRandom">
+    <div class="btn-box">
+      <div class="btn" @click="selectFile">选择图片</div>
+      <div class="btn" @click="saveToImg">存为图片</div>
+      <div class="btn" @click="switchImg">切换图片</div>
     </div>
-  </div>
-  <div class="btn-box">
-    <div class="btn" @click="selectFile">选择图片</div>
-    <div class="btn" style="left: calc(80% - 80px)" @click="saveToImg">存为图片</div>
   </div>
 </template>
 
@@ -315,31 +325,32 @@ div,body,p {
 }
 .show-box {
   width: 100vw;
-  height: calc(100vh - 80px - 80px);
+  height: calc(100vh - 180px);
   display: flex;
   justify-content: space-around;
   align-content: center;
-  padding-top: 30px;
+  padding: 15px;
   box-sizing: border-box;
 }
 .img-box {
-  width: 48%;
+  width: 100%;
 }
 .img-box canvas {
   width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .btn-box {
   width: 100vw;
-  height: 80px;
+  padding: 0 15px;
   display: flex;
   justify-content: center;
-}
-.btn-box :first-child {
-  margin-right: 30px;
+  column-gap: 20px;
+  box-sizing: border-box;
 }
 .btn {
-  width: 80px;
   height: 32px;
+  width: 25%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -351,21 +362,25 @@ div,body,p {
 .slider {
   height: 80px;
   width: 100vw;
+  padding-bottom: 40px;
   display: flex;
   justify-content: center;
-}
-.slider :first-child {
-  margin-right: 30px;
+  flex-wrap: wrap;
 }
 .slider-input {
   height: 40px;
-  width: 30%;
+  width: 80%;
+  margin-bottom: 10px;
 }
 .slider-input p {
   font-size: 14px;
-  margin-bottom: 10px;
 }
 .slider-input input {
   width: 100%;
+}
+.bottom-box {
+  position: absolute;
+  height: 180px;
+  bottom: 0;
 }
 </style>
